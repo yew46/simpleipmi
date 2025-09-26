@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Panel · Pure Vanilla (Enhanced)</title>
+  <style>
+    :root{
+      --bg: #0b0c10; --card: #101218; --muted: #707686; --text: #e6e7eb; --primary: #4f7cff; --border: #22252e; --accent: #151a26; --accent-2:#0e121b;
+      --success:#18b26b; --warn:#e2a500; --danger:#ef4444; --neutral:#9aa3b2;
+      --shadow: 0 6px 24px rgba(0,0,0,.28), 0 2px 8px rgba(0,0,0,.2);
+    }
+    :root[data-theme="light"]{
+      --bg:#f6f7fb; --card:#ffffff; --muted:#6b7280; --text:#0b1220; --primary:#3b82f6; --border:#e5e7eb; --accent:#f2f4f8; --accent-2:#eef2f7; --shadow: 0 6px 24px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.05);
+    }
+    @media (prefers-color-scheme: light){
+      :root[data-theme="auto"]{ --bg:#f6f7fb; --card:#ffffff; --muted:#6b7280; --text:#0b1220; --primary:#3b82f6; --border:#e5e7eb; --accent:#f2f4f8; --accent-2:#eef2f7; --shadow: 0 6px 24px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.05); }
+    }
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{ margin:0; background:linear-gradient(180deg, var(--bg), var(--accent-2) 200%); color:var(--text); font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; }
+    .shell{ display:grid; grid-template-columns: 260px 1fr; min-height:100vh; transition: grid-template-columns .25s ease; }
+    .sidebar{ position:sticky; top:0; height:100dvh; border-right:1px solid var(--border); background: linear-gradient(180deg, var(--card), transparent 120%); }
+    .brand{ height:56px; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 12px 0 16px; border-bottom:1px solid var(--border); font-weight:700; letter-spacing:.2px }
+    .brand .collapse{ border:none; background:transparent; color:inherit; font-size:18px; cursor:pointer; border-radius:8px; padding:6px }
+    .brand .collapse:hover{ background: color-mix(in oklab, var(--primary) 18%, transparent) }
+
+    nav{ padding:10px }
+    .nav-btn{ width:100%; display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius:12px; border:1px solid transparent; background:transparent; color:inherit; cursor:pointer; transition: transform .05s ease }
+    .nav-btn:hover{ background:var(--accent) }
+    .nav-btn:active{ transform: translateY(1px) }
+    .nav-btn[aria-current="page"]{ background: color-mix(in oklab, var(--primary) 14%, transparent); color: var(--text); border-color: color-mix(in oklab, var(--primary) 30%, var(--border)); }
+    .side-foot{ margin-top:10px; padding:10px; border-top:1px solid var(--border); color:var(--muted); font-size:12px }
+
+    .content{ padding:24px 28px }
+    .header{ display:flex; align-items:center; gap:12px; justify-content:space-between; margin-bottom:18px }
+    .lhs{ display:flex; align-items:center; gap:10px }
+    h1{ font-size:22px; margin:0 }
+
+    .toolbar{ display:flex; align-items:center; gap:8px }
+    .kbd{ border:1px solid var(--border); border-bottom-width:2px; padding:2px 6px; border-radius:6px; font-size:12px; color:var(--muted) }
+
+    .grid{ display:grid; gap:16px }
+    .grid.cols-3{ grid-template-columns: repeat(3, minmax(0,1fr)) }
+    @media (max-width: 1080px){ .grid.cols-3{ grid-template-columns: 1fr 1fr } }
+    @media (max-width: 820px){ .shell{ grid-template-columns: 64px 1fr } .sidebar.compact .label{ display:none } .grid.cols-3{ grid-template-columns: 1fr } }
+
+    .card{ background:var(--card); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden }
+    .card-h{ padding:14px 16px; border-bottom:1px solid var(--border); font-weight:600; display:flex; align-items:center; justify-content:space-between; gap:12px }
+    .card-c{ padding:16px }
+
+    .stat{ display:flex; align-items:center; justify-content:space-between }
+    .stat .title{ color:var(--muted); font-size:12px }
+    .stat .value{ font-size:22px; font-weight:800 }
+    .spark{ width:120px; height:36px }
+
+    .btn{ padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:var(--accent); color:inherit; cursor:pointer }
+    .btn:hover{ filter:brightness(1.05) }
+    .btn.primary{ background:var(--primary); border-color: color-mix(in oklab, var(--primary) 60%, var(--border)); color:white }
+    .btn.ghost{ background:transparent }
+    .btn.danger{ background: color-mix(in oklab, var(--danger) 25%, transparent); border-color: color-mix(in oklab, var(--danger) 40%, var(--border)); }
+    .btn.small{ padding:6px 8px; font-size:12px; border-radius:8px }
+
+    .input, select{ width:100%; padding:10px 12px; border:1px solid var(--border); background:var(--bg); color:inherit; border-radius:10px }
+    .input[aria-invalid="true"]{ outline:2px solid color-mix(in oklab, var(--danger) 60%, transparent) }
+
+    .tbl-wrap{ overflow:auto }
+    .tbl{ width:100%; border-collapse:collapse; font-size:13px }
+    .tbl th, .tbl td{ padding:10px 8px; border-bottom:1px solid var(--border); text-align:left; white-space:nowrap }
+    .tbl th{ position:sticky; top:0; background:var(--card); z-index:1 }
+    .tbl tr:hover td{ background: color-mix(in oklab, var(--accent) 60%, transparent) }
+    .td-actions{ text-align:right }
+
+    .badge{ display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid transparent }
+    .online{ background: color-mix(in oklab, var(--success) 20%, transparent); border-color: color-mix(in oklab, var(--success) 50%, var(--border)) }
+    .degraded{ background: color-mix(in oklab, var(--warn) 22%, transparent); border-color: color-mix(in oklab, var(--warn) 50%, var(--border)) }
+    .offline{ background: color-mix(in oklab, var(--neutral) 20%, transparent); border-color: color-mix(in oklab, var(--neutral) 50%, var(--border)) }
+
+    .row{ display:grid; gap:10px }
+    .row.cols-2{ grid-template-columns: 1fr 1fr }
+
+    dialog{ border:none; border-radius:14px; padding:0; width:min(600px, 92vw); background:var(--card); color:inherit; box-shadow:var(--shadow) }
+    dialog::backdrop{ background:rgba(0,0,0,.45) }
+    .dlg-h{ padding:14px 16px; border-bottom:1px solid var(--border); font-weight:600 }
+    .dlg-c{ padding:16px }
+    .dlg-f{ display:flex; gap:10px; justify-content:flex-end; padding:12px 16px; border-top:1px solid var(--border) }
+
+    .muted{ color:var(--muted) }
+    code{ background: color-mix(in oklab, var(--accent) 60%, transparent); padding:2px 6px; border-radius:6px; border:1px solid var(--border) }
+    .hidden{ display:none !important }
+
+    .toast{ position: fixed; right:16px; bottom:16px; display:flex; gap:10px; align-items:center; background:var(--card); color:inherit; border:1px solid var(--border); padding:10px 12px; border-radius:12px; box-shadow:var(--shadow); opacity:0; transform: translateY(10px); transition: .2s ease; pointer-events:none }
+    .toast.show{ opacity:1; transform: translateY(0) }
+
+    .pill-tabs{ display:flex; gap:6px; flex-wrap:wrap }
+    .pill-tabs .tab{ padding:6px 10px; border:1px solid var(--border); border-radius:999px; background:var(--accent); cursor:pointer; font-size:12px }
+    .pill-tabs .tab[aria-selected="true"]{ background: color-mix(in oklab, var(--primary) 22%, transparent); border-color: color-mix(in oklab, var(--primary) 50%, var(--border)) }
+
+    .banner{ display:none; align-items:center; justify-content:center; gap:8px; padding:10px; border:1px dashed var(--warn); border-radius:12px; background: color-mix(in oklab, var(--warn) 12%, transparent); margin-bottom:12px }
+    .banner.show{ display:flex }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand" id="brandRow">
+        <span id="brandTitle">Admin Panel</span>
+        <button class="collapse" id="btnCollapse" title="Toggle sidebar (⌘/Ctrl+B)">⫶</button>
+      </div>
+      <nav>
+        <button class="nav-btn" data-target="dashboard" aria-current="page">
+          <span>📊</span><span class="label">DashPanel Overview</span>
+        </button>
+        <button class="nav-btn" data-target="nodes">
+          <span>🖥️</span><span class="label">Server Node Management</span>
+        </button>
+        <button class="nav-btn" data-target="settings">
+          <span>⚙️</span><span class="label">Panel Settings</span>
+        </button>
+      </nav>
+      <div class="side-foot">
+        <div>Theme: <span id="themeText">System</span></div>
+        <div>Maintenance: <span id="maintText">Off</span></div>
+        <div class="muted" style="margin-top:8px">Shortcuts: <span class="kbd">g d</span> <span class="kbd">g n</span> <span class="kbd">g s</span></div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="content">
+      <div id="maintBanner" class="banner">⚠️ Maintenance mode is ON — non-admin users are blocked.</div>
+      <div class="header">
+        <div class="lhs">
+          <h1 id="pageTitle">Overview</h1>
+          <span class="muted" id="pageHint"></span>
+        </div>
+        <div class="toolbar">
+          <button class="btn small" id="btnThemeCycle" title="Cycle Theme">🌓 Theme</button>
+          <button class="btn small" id="btnDataSim" title="Toggle Data Simulation">⟳ Live</button>
+          <button class="btn small" id="btnExport">⬇︎ Export</button>
+          <label class="btn small" title="Import JSON">
+            ⬆︎ Import
+            <input id="fileImport" type="file" accept="application/json" hidden />
+          </label>
+        </div>
+      </div>
+
+      <!-- Dashboard -->
+      <section id="page-dashboard">
+        <div class="grid cols-3">
+          <div class="card">
+            <div class="card-c stat">
+              <div>
+                <div class="title">Online Nodes</div>
+                <div class="value" id="stat-online">0/0</div>
+              </div>
+              <canvas class="spark" id="spark-online" aria-hidden="true"></canvas>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-c stat">
+              <div>
+                <div class="title">Average CPU</div>
+                <div class="value" id="stat-cpu">0%</div>
+              </div>
+              <canvas class="spark" id="spark-cpu" aria-hidden="true"></canvas>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-c stat">
+              <div>
+                <div class="title">Disk Alerts</div>
+                <div class="value" id="stat-disk">0</div>
+              </div>
+              <canvas class="spark" id="spark-disk" aria-hidden="true"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <div class="card-h">Recent Events <span class="muted" style="font-weight:400">(auto rotates)</span></div>
+          <div class="card-c">
+            <ul id="events" class="muted" style="padding-left:18px; margin:0"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Nodes -->
+      <section id="page-nodes" class="hidden">
+        <div class="card">
+          <div class="card-h" style="gap:8px">
+            <span>Node List</span>
+            <div style="display:flex; gap:8px; align-items:center">
+              <div class="pill-tabs" id="statusTabs">
+                <button class="tab" data-filter="all" aria-selected="true">All</button>
+                <button class="tab" data-filter="online">Online</button>
+                <button class="tab" data-filter="degraded">Degraded</button>
+                <button class="tab" data-filter="offline">Offline</button>
+              </div>
+              <input id="search" class="input" placeholder="Search name/IP/region… (⌘/Ctrl+K)" style="max-width:260px"/>
+              <button class="btn primary" id="btn-add">＋ Add Node</button>
+            </div>
+          </div>
+          <div class="card-c">
+            <div class="tbl-wrap">
+              <table class="tbl" id="nodesTable">
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" id="chkAll"/></th>
+                    <th data-sort="name" role="button">Name ⥮</th>
+                    <th data-sort="ip" role="button">IP ⥮</th>
+                    <th data-sort="region" role="button">Region ⥮</th>
+                    <th data-sort="status" role="button">Status ⥮</th>
+                    <th data-sort="cpu" role="button">CPU ⥮</th>
+                    <th data-sort="disk" role="button">Disk ⥮</th>
+                    <th class="td-actions">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="nodesTbody"></tbody>
+              </table>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:8px; margin-top:10px">
+              <div>
+                <button class="btn danger small" id="btnBulkDel">Delete Selected</button>
+                <button class="btn small" id="btnGen">Generate 5 Fake</button>
+              </div>
+              <div class="muted" id="rowsHint"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section id="page-settings" class="hidden">
+        <div class="card">
+          <div class="card-h">Basic Panel Settings</div>
+          <div class="card-c">
+            <div class="row">
+              <div class="row cols-2">
+                <div class="field">
+                  <label for="titleInput">Panel Title</label>
+                  <input id="titleInput" class="input" placeholder="e.g. Admin Panel" />
+                </div>
+                <div class="field">
+                  <label for="themeSelect">Theme Mode</label>
+                  <select id="themeSelect">
+                    <option value="auto">System</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </div>
+              </div>
+              <div class="row cols-2">
+                <div class="field">
+                  <label>Maintenance Mode</label>
+                  <label class="btn" style="display:inline-flex; align-items:center; gap:8px">
+                    <input type="checkbox" id="maintSwitch"/> <span>Enable</span>
+                  </label>
+                  <div class="muted" style="font-size:12px">When on, only admin can access</div>
+                </div>
+                <div class="field">
+                  <label>Danger Zone</label>
+                  <button class="btn danger" id="btnReset">Reset All Data</button>
+                </div>
+              </div>
+              <div>
+                <button class="btn primary" id="btn-save">Save Settings</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Add / Edit Node Dialog -->
+      <dialog id="dlgNode">
+        <div class="dlg-h" id="dlgTitle">Add Node</div>
+        <form id="nodeForm" class="dlg-c" method="dialog">
+          <div class="row cols-2">
+            <div class="field"><label for="nName">Name</label><input id="nName" name="name" class="input" placeholder="e.g. edge-us-2" required></div>
+            <div class="field"><label for="nIP">IP Address</label><input id="nIP" name="ip" class="input" placeholder="e.g. 192.168.1.10" required pattern="^((25[0-5]|2[0-4]\d|[01]?\d?\d)(\.|$)){4}$"></div>
+          </div>
+          <div class="row cols-2" style="margin-top:10px">
+            <div class="field">
+              <label for="nRegion">Region</label>
+              <select id="nRegion" name="region">
+                <option value="us-east">US East</option>
+                <option value="us-west">US West</option>
+                <option value="eu-west">EU West</option>
+                <option value="ap-sg">AP Singapore</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="nStatus">Status</label>
+              <select id="nStatus" name="status">
+                <option value="online">Online</option>
+                <option value="degraded">Degraded</option>
+                <option value="offline">Offline</option>
+              </select>
+            </div>
+          </div>
+          <div class="row cols-2" style="margin-top:10px">
+            <div class="field"><label for="nCPU">CPU %</label><input id="nCPU" name="cpu" class="input" type="number" min="0" max="100" value="0"></div>
+            <div class="field"><label for="nDisk">Disk %</label><input id="nDisk" name="disk" class="input" type="number" min="0" max="100" value="0"></div>
+          </div>
+        </form>
+        <div class="dlg-f">
+          <button class="btn ghost" id="dlgCancel" value="cancel">Cancel</button>
+          <button class="btn primary" id="dlgOk" value="default">Save</button>
+        </div>
+      </dialog>
+
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    // ======= App State & Persistence =======
+    const regions = { 'us-east':'US East', 'us-west':'US West', 'eu-west':'EU West', 'ap-sg':'AP Singapore' };
+    const store = {
+      load(){ try { return JSON.parse(localStorage.getItem('panel-state')||'null') } catch{ return null } },
+      save(s){ localStorage.setItem('panel-state', JSON.stringify(s)) }
+    };
+    let state = store.load() || {
+      page: 'dashboard', title: 'Admin Panel', theme: 'auto', maintain: false,
+      nodes: [
+        { id: 'n-1', name: 'edge-us-1', ip: '34.21.10.8', region: 'us-east', status: 'online',  cpu: 32, disk: 58 },
+        { id: 'n-2', name: 'edge-eu-1', ip: '54.120.33.2', region: 'eu-west', status: 'degraded',cpu: 71, disk: 76 },
+        { id: 'n-3', name: 'batch-ap-1', ip: '13.212.55.90', region: 'ap-sg',   status: 'offline', cpu:  0, disk: 12 }
+      ]
+    };
+
+    const ui = { $: s=>document.querySelector(s), $$: s=>document.querySelectorAll(s) };
+
+    function save(){ store.save(state) }
+
+    // ======= Utilities =======
+    function setTheme(v){
+      document.documentElement.setAttribute('data-theme', v);
+      ui.$('#themeText').textContent = v==='auto'?'System': v==='light'?'Light':'Dark';
+    }
+    function cycleTheme(){ state.theme = state.theme==='auto'? 'dark' : state.theme==='dark'? 'light' : 'auto'; setTheme(state.theme); save(); toast(`Theme → <b>${ui.$('#themeText').textContent}</b>`) }
+
+    function badge(status){
+      const label = { online:'Online', degraded:'Degraded', offline:'Offline' }[status] || status;
+      const cls = status === 'online' ? 'online' : status === 'degraded' ? 'degraded' : 'offline';
+      return `<span class="badge ${cls}">${label}</span>`;
+    }
+
+    function computeStats(){
+      const total = state.nodes.length;
+      const online = state.nodes.filter(n=>n.status==='online').length;
+      const avgCpu = total? Math.round(state.nodes.reduce((a,b)=>a+b.cpu,0)/total) : 0;
+      const highDisk = state.nodes.filter(n=>n.disk>=80).length;
+      ui.$('#stat-online').textContent = `${online}/${total}`;
+      ui.$('#stat-cpu').textContent = `${avgCpu}%`;
+      ui.$('#stat-disk').textContent = `${highDisk}`;
+      ui.$('#rowsHint').textContent = `${total} rows`;
+    }
+
+    function drawSpark(id, data){
+      const c = ui.$(id); if(!c) return; const w=c.width= c.clientWidth, h=c.height=c.clientHeight; const ctx=c.getContext('2d');
+      ctx.clearRect(0,0,w,h); if(!data.length) return; const max=Math.max(...data), min=Math.min(...data);
+      ctx.lineWidth=1.6; ctx.beginPath(); data.forEach((v,i)=>{ const x=i*(w/(data.length-1)); const y=h-((v-min)/(max-min||1))*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y) }); ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--primary'); ctx.stroke();
+    }
+
+    function toast(html){ const el=ui.$('#toast'); el.innerHTML=html; el.classList.add('show'); clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('show'), 1800) }
+
+    // ======= Rendering =======
+    function renderNodes(){
+      const tbody = ui.$('#nodesTbody'); if(!tbody) return; tbody.innerHTML='';
+      const q = ui.$('#search').value.toLowerCase();
+      const activeTab = ui.$('.pill-tabs .tab[aria-selected="true"]').dataset.filter;
+      const filtered = state.nodes.filter(n=>{
+        const hit = [n.name,n.ip,regions[n.region]||n.region,n.status].some(x=>String(x).toLowerCase().includes(q));
+        const statusOk = activeTab==='all' ? true : n.status===activeTab; return hit && statusOk;
+      });
+
+      const rows = filtered.map(n=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="checkbox" data-id="${n.id}" class="rowchk"/></td>
+          <td><strong>${n.name}</strong></td>
+          <td><button class="btn small ghost" data-act="copy" data-ip="${n.ip}" title="Copy IP">${n.ip}</button></td>
+          <td>${regions[n.region]||n.region}</td>
+          <td>${badge(n.status)}</td>
+          <td>${n.cpu}%</td>
+          <td>${n.disk}%</td>
+          <td class="td-actions" style="display:flex; gap:6px; justify-content:flex-end">
+            <button class="btn small" data-act="edit" data-id="${n.id}">Edit</button>
+            <button class="btn danger small" data-act="del" data-id="${n.id}">Delete</button>
+          </td>`;
+        return tr;
+      });
+      rows.forEach(r=>tbody.appendChild(r));
+      if(!rows.length){ const tr=document.createElement('tr'); tr.innerHTML = `<td colspan="8" class="muted" style="text-align:center">No matching nodes</td>`; tbody.appendChild(tr) }
+      computeStats();
+    }
+
+    function setPage(key){
+      state.page = key; save();
+      ui.$$('.nav-btn').forEach(btn=>{ btn.dataset.target===key ? btn.setAttribute('aria-current','page') : btn.removeAttribute('aria-current') });
+      ['dashboard','nodes','settings'].forEach(p=> ui.$('#page-'+p).classList.toggle('hidden', p!==key));
+      ui.$('#pageTitle').textContent = key==='dashboard'?'Overview': key==='nodes'?'Server Node Management':'Panel Settings';
+      ui.$('#pageHint').textContent = key==='dashboard'? 'Last 5 minutes' : '';
+      ui.$('#maintBanner').classList.toggle('show', !!state.maintain);
+    }
+
+    // ======= Sorting =======
+    let sort = { key:'', dir:1 };
+    function applySort(){ if(!sort.key) return; state.nodes.sort((a,b)=> (a[sort.key]>b[sort.key]?1:-1)*sort.dir); }
+
+    // ======= Events =======
+    window.addEventListener('DOMContentLoaded', () => {
+      // init
+      ui.$('#titleInput').value = state.title; ui.$('#brandTitle').textContent = state.title;
+      ui.$('#themeSelect').value = state.theme; setTheme(state.theme);
+      ui.$('#maintSwitch').checked = state.maintain; ui.$('#maintText').textContent = state.maintain? 'On':'Off';
+
+      // default page
+      setPage(state.page);
+      renderNodes(); computeStats();
+
+      // sidebar collapse
+      ui.$('#btnCollapse').addEventListener('click', ()=> document.querySelector('#sidebar').classList.toggle('compact'));
+
+      // nav
+      ui.$$('.nav-btn').forEach(btn=> btn.addEventListener('click', () => setPage(btn.dataset.target)) );
+
+      // toolbar
+      ui.$('#btnThemeCycle').addEventListener('click', cycleTheme);
+      ui.$('#btnDataSim').addEventListener('click', toggleSim);
+      ui.$('#btnExport').addEventListener('click', ()=>{
+        const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+        const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='panel-state.json'; a.click(); URL.revokeObjectURL(a.href);
+      });
+      ui.$('#fileImport').addEventListener('change', async (e)=>{
+        const f=e.target.files[0]; if(!f) return; const text=await f.text(); try{ const s=JSON.parse(text); state=s; save(); location.reload(); }catch{ toast('Invalid JSON') }
+      });
+
+      // settings
+      ui.$('#btn-save').addEventListener('click', () => {
+        state.title = ui.$('#titleInput').value.trim() || 'Admin Panel';
+        state.theme = ui.$('#themeSelect').value;
+        state.maintain = ui.$('#maintSwitch').checked;
+        ui.$('#brandTitle').textContent = state.title; setTheme(state.theme); ui.$('#maintText').textContent = state.maintain? 'On':'Off';
+        save(); setPage(state.page); toast('Settings saved');
+      });
+      ui.$('#btnReset').addEventListener('click', ()=>{ if(confirm('Reset all local data?')){ localStorage.removeItem('panel-state'); location.reload() } });
+
+      // add/edit dialog
+      const dlg = ui.$('#dlgNode');
+      function openNodeDialog(mode, node){
+        ui.$('#dlgTitle').textContent = mode==='edit'?'Edit Node':'Add Node';
+        ui.$('#nName').value = node?.name||'';
+        ui.$('#nIP').value   = node?.ip||'';
+        ui.$('#nRegion').value = node?.region||'us-east';
+        ui.$('#nStatus').value = node?.status||'online';
+        ui.$('#nCPU').value = node?.cpu ?? 0;
+        ui.$('#nDisk').value = node?.disk ?? 0;
+        dlg.dataset.mode = mode; dlg.dataset.id = node?.id||''; dlg.showModal();
+        setTimeout(()=>ui.$('#nName').focus(), 20);
+      }
+
+      ui.$('#btn-add').addEventListener('click', ()=> openNodeDialog('add'));
+      ui.$('#dlgCancel').addEventListener('click', ()=> dlg.close());
+      ui.$('#dlgOk').addEventListener('click', ()=>{
+        const form = ui.$('#nodeForm');
+        const valid = form.reportValidity();
+        ui.$('#nIP').setAttribute('aria-invalid', !ui.$('#nIP').checkValidity());
+        if(!valid) return;
+        const n = {
+          id: dlg.dataset.mode==='edit'? dlg.dataset.id : ('n-'+Date.now()),
+          name: ui.$('#nName').value.trim(),
+          ip: ui.$('#nIP').value.trim(),
+          region: ui.$('#nRegion').value,
+          status: ui.$('#nStatus').value,
+          cpu: Math.max(0, Math.min(100, parseInt(ui.$('#nCPU').value)||0)),
+          disk: Math.max(0, Math.min(100, parseInt(ui.$('#nDisk').value)||0))
+        };
+        if(dlg.dataset.mode==='edit'){
+          const idx = state.nodes.findIndex(x=>x.id===n.id); if(idx>-1) state.nodes[idx]=n;
+        } else { state.nodes.push(n) }
+        save(); renderNodes(); dlg.close(); toast('Saved ✅');
+      });
+
+      // node actions
+      ui.$('#nodesTable').addEventListener('click', (e) => {
+        const btn = e.target.closest('button'); if(!btn) return;
+        const act = btn.dataset.act;
+        if(act==='copy'){ navigator.clipboard.writeText(btn.dataset.ip); toast('IP copied') ;return }
+        const id = btn.dataset.id; const idx = state.nodes.findIndex(n=>n.id===id); if(idx<0) return;
+        if(act==='del'){
+          if(confirm('Delete this node?')){ state.nodes.splice(idx,1); save(); renderNodes(); }
+        } else if(act==='edit'){
+          openNodeDialog('edit', state.nodes[idx]);
+        }
+      });
+
+      // bulk
+      ui.$('#chkAll').addEventListener('change', (e)=> ui.$$('.rowchk').forEach(c=> c.checked=e.target.checked));
+      ui.$('#btnBulkDel').addEventListener('click', ()=>{
+        const ids = [...ui.$$('.rowchk:checked')].map(c=>c.dataset.id);
+        if(!ids.length) return toast('No rows selected');
+        if(confirm(`Delete ${ids.length} selected?`)){
+          state.nodes = state.nodes.filter(n=>!ids.includes(n.id)); save(); renderNodes();
+        }
+      });
+      ui.$('#btnGen').addEventListener('click', ()=>{ addFake(5); save(); renderNodes(); });
+
+      // search, tabs, sort
+      ui.$('#search').addEventListener('input', renderNodes);
+      ui.$('#search').addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ e.currentTarget.value=''; renderNodes() } });
+      ui.$$('#statusTabs .tab').forEach(t=> t.addEventListener('click', ()=>{ ui.$$('#statusTabs .tab').forEach(x=>x.setAttribute('aria-selected','false')); t.setAttribute('aria-selected','true'); renderNodes(); }));
+      ui.$$('#nodesTable th[data-sort]').forEach(th=> th.addEventListener('click', ()=>{ const k=th.dataset.sort; sort.dir = sort.key===k? -sort.dir : 1; sort.key=k; applySort(); renderNodes(); }));
+
+      // keyboard
+      window.addEventListener('keydown', (e)=>{
+        const mod = e.metaKey||e.ctrlKey;
+        if(mod && e.key.toLowerCase()==='b'){ document.querySelector('#sidebar').classList.toggle('compact'); }
+        if(mod && e.key.toLowerCase()==='k'){ e.preventDefault(); ui.$('#search').focus(); }
+        if(e.key==='g'){ ui._g = Date.now(); return }
+        if(e.key==='d' && ui._g && Date.now()-ui._g<600){ setPage('dashboard') }
+        if(e.key==='n' && ui._g && Date.now()-ui._g<600){ setPage('nodes') }
+        if(e.key==='s' && ui._g && Date.now()-ui._g<600){ setPage('settings') }
+      });
+
+      // events list (auto-rotate)
+      const eventsSeed = [
+        'Deployed <code>v1.3.7</code> to us-east (success)',
+        'Routine backup completed (03:00 UTC)',
+        'Node edge-eu-1 experienced IO jitter (auto-recovered)'
+      ];
+      const evUL = ui.$('#events');
+      function renderEvents(){ evUL.innerHTML = eventsSeed.slice(-6).map(x=>`<li>${x}</li>`).join('') }
+      renderEvents();
+      setInterval(()=>{ const ts=new Date().toLocaleTimeString(); const r=[
+        `Audit trail synced (${ts})`,
+        `New node joined <code>${randName()}</code>`,
+        `Alert cleared on <code>${(state.nodes[0]||{}).name||'edge-us-1'}</code>`
+      ]; eventsSeed.push(r[Math.floor(Math.random()*r.length)]); if(eventsSeed.length>20) eventsSeed.shift(); renderEvents(); }, 3500);
+
+      // initial graphs
+      drawSpark('#spark-online', [1,2,2,3,3,2,3,3]);
+      drawSpark('#spark-cpu',    [20,30,45,40,55,60,58,62]);
+      drawSpark('#spark-disk',   [1,1,0,2,1,2,3,2]);
+    });
+
+    // ======= Fake data & Live sim =======
+    function randName(){ const p=['edge','batch','db','cache']; const r=['us','eu','ap']; const suf=['1','2','3','4']; return `${p[Math.floor(Math.random()*p.length)]}-${r[Math.floor(Math.random()*r.length)]}-${suf[Math.floor(Math.random()*suf.length)]}` }
+    function randIP(){ return Array.from({length:4},()=>Math.floor(Math.random()*256)).join('.') }
+    function addFake(n=1){
+      const st=['online','degraded','offline'];
+      for(let i=0;i<n;i++){
+        state.nodes.push({ id:'n-'+Date.now()+i, name:randName(), ip:randIP(), region:Object.keys(regions)[Math.floor(Math.random()*4)], status:st[Math.floor(Math.random()*3)], cpu:Math.floor(Math.random()*101), disk:Math.floor(Math.random()*101) });
+      }
+    }
+
+    let simTimer=null;
+    function toggleSim(){ if(simTimer){ clearInterval(simTimer); simTimer=null; toast('Live off'); return } simTimer=setInterval(()=>{
+      if(!state.nodes.length) return; const i=Math.floor(Math.random()*state.nodes.length); const n=state.nodes[i];
+      n.cpu = Math.max(0, Math.min(100, n.cpu + (Math.random()*16-8)|0));
+      n.disk= Math.max(0, Math.min(100, n.disk+ (Math.random()*6-3)|0));
+      if(Math.random()<.1){ n.status=['online','degraded','offline'][Math.floor(Math.random()*3)] }
+      save(); computeStats(); drawSpark('#spark-cpu', Array.from({length:8},()=>Math.floor(Math.random()*70)+20)); drawSpark('#spark-online', Array.from({length:8},()=>Math.floor(Math.random()*3)+1)); drawSpark('#spark-disk', Array.from({length:8},()=>Math.floor(Math.random()*4)) );
+      renderNodes();
+    }, 1200); toast('Live on') }
+  </script>
+</body>
+</html>
