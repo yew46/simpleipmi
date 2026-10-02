@@ -122,6 +122,78 @@ class DiscoveryTests(unittest.TestCase):
             )
         )
 
+    def test_http_port_requires_an_integer_in_range(self):
+        for port in (True, False, 80.9, 80.0, "80", None, [], {}, 0, -1, 65536):
+            with self.subTest(port=port):
+                self.assertIsNone(
+                    parse_discovery_response(
+                        response("abc", http_port=port), "192.0.2.223", "abc"
+                    )
+                )
+
+    def test_http_port_rejects_overflowing_json_number(self):
+        payload = response("abc").replace(b'"http_port": 80', b'"http_port": 1e309')
+        self.assertIsNone(parse_discovery_response(payload, "192.0.2.223", "abc"))
+
+    def test_http_port_boundaries_and_omitted_default(self):
+        for port in (1, 80, 8080, 65535):
+            with self.subTest(port=port):
+                device = parse_discovery_response(
+                    response("abc", http_port=port), "192.0.2.223", "abc"
+                )
+                self.assertIsNotNone(device)
+                self.assertEqual(device.http_port, port)
+                suffix = "" if port == 80 else f":{port}"
+                self.assertEqual(device.web_url, f"http://192.0.2.223{suffix}/")
+        payload = json.loads(response("abc"))
+        del payload["http_port"]
+        device = parse_discovery_response(json.dumps(payload).encode(), "192.0.2.223", "abc")
+        self.assertIsNotNone(device)
+        self.assertEqual(device.http_port, 80)
+
+    def test_version_requires_the_supported_integer(self):
+        for version in (True, False, 1.0, "1", None, [], {}, 0, 2):
+            with self.subTest(version=version):
+                self.assertIsNone(
+                    parse_discovery_response(
+                        response("abc", version=version), "192.0.2.223", "abc"
+                    )
+                )
+
+    def test_bad_response_does_not_hide_later_valid_device(self):
+        class MalformedThenValidSocket(FakeDiscoverySocket):
+            elapsed = 0.0
+            timeout = 0.0
+
+            def settimeout(self, value):
+                self.timeout = value
+
+            def sendto(self, request, target):
+                nonce = json.loads(request)["nonce"]
+                valid = response(nonce)
+                malformed = valid.replace(b'"http_port": 80', b'"http_port": 1e309')
+                self.responses.extend([
+                    (malformed, ("192.0.2.222", target[1])),
+                    (response(nonce, http_port=True), ("192.0.2.221", target[1])),
+                    (valid, ("192.0.2.223", target[1])),
+                ])
+
+            def recvfrom(self, size):
+                if self.responses:
+                    return self.responses.pop(0)
+                self.elapsed += self.timeout
+                raise socket.timeout()
+
+        sock = MalformedThenValidSocket()
+        with patch("exoanchor_toolkit.discovery.time.monotonic", side_effect=lambda: sock.elapsed):
+            devices = discover_devices(
+                timeout=0.1, socket_factory=lambda *args: sock,
+            )
+        self.assertEqual(len(devices), 1)
+        self.assertEqual(devices[0].source_ip, "192.0.2.223")
+        self.assertEqual(devices[0].web_url, "http://192.0.2.223/")
+        self.assertAlmostEqual(sock.elapsed, 0.1)
+
     def test_source_ip_is_authoritative_for_web_url(self):
         device = parse_discovery_response(
             response("abc", ipv4="192.0.2.99", http_port=8080),

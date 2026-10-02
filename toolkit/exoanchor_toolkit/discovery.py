@@ -91,19 +91,23 @@ def parse_discovery_response(
         return None
     if not isinstance(response, dict):
         return None
+    version = response.get("version")
     if (
         response.get("service") != "exoanchor"
-        or response.get("version") != DISCOVERY_VERSION
+        or type(version) is not int
+        or version != DISCOVERY_VERSION
         or response.get("nonce") != expected_nonce
     ):
+        return None
+    # UDP replies are untrusted. Coercion accepts booleans and truncates
+    # fractional ports; overflowing JSON numbers can also abort the scan.
+    http_port = response.get("http_port", 80)
+    if type(http_port) is not int or not 1 <= http_port <= 65535:
         return None
     try:
         source_ip = str(ipaddress.IPv4Address(source_ip))
         reported_ip = str(ipaddress.IPv4Address(str(response.get("ipv4", ""))))
-        http_port = int(response.get("http_port", 80))
     except (ipaddress.AddressValueError, TypeError, ValueError):
-        return None
-    if not 1 <= http_port <= 65535:
         return None
 
     def text(key: str, limit: int) -> str:
