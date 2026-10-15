@@ -234,6 +234,42 @@ class DeviceHttpTests(unittest.TestCase):
             "Bearer session-token",
         )
 
+    def test_invalid_static_configuration_sends_no_http_requests(self) -> None:
+        for address, mask, gateway in (
+            ("192.0.2.50", "0.0.0.255", "-"),
+            ("192.0.2.0", "255.255.255.0", "-"),
+            ("192.0.2.50", "255.255.255.0", "198.51.100.1"),
+            ("192.0.2.50", "255.255.255.0", "192.0.2.255"),
+        ):
+            with self.subTest(address=address, mask=mask, gateway=gateway):
+                router = Router()
+                client = DeviceHttpClient(
+                    "192.0.2.223", password="test-only", opener=router,
+                    sleeper=lambda _: None,
+                )
+                with self.assertRaises(ToolkitError):
+                    HttpNetworkProvisioner(client).stage_static(address, mask, gateway)
+                self.assertEqual(router.requests, [])
+
+    def test_valid_static_configuration_posts_normalized_values(self) -> None:
+        for gateway, expected in (("none", "-"), (" 192.0.2.1 ", "192.0.2.1")):
+            with self.subTest(gateway=gateway):
+                router = Router()
+                client = DeviceHttpClient("192.0.2.223", opener=router)
+                HttpNetworkProvisioner(client).stage_static(
+                    " 192.0.2.50 ", " 255.255.255.0 ", gateway,
+                    "1.1.1.1", "169.254.1.1",
+                )
+                self.assertEqual(len(router.requests), 1)
+                request = router.requests[0]
+                self.assertEqual(request.method, "POST")
+                self.assertTrue(request.full_url.endswith("/api/v1/network/config"))
+                self.assertEqual(json.loads(request.data), {
+                    "action": "static", "address": "192.0.2.50",
+                    "netmask": "255.255.255.0", "gateway": expected,
+                    "dns_primary": "1.1.1.1", "dns_secondary": "169.254.1.1",
+                })
+
     def test_ota_upload_checks_board_and_digest(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             image = Path(temp) / "app.bin"

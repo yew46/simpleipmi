@@ -103,6 +103,69 @@ class NetworkValidationTests(unittest.TestCase):
             ],
         )
 
+    def test_netmask_rejects_hostmasks_and_zero(self):
+        for value in ("0.0.0.255", "0.0.255.255", "0.255.255.255", "0.0.0.0"):
+            with self.subTest(value=value):
+                with self.assertRaises(ToolkitError):
+                    validate_netmask(value)
+        for value in (
+            "128.0.0.0", "255.0.0.0", "255.255.255.0",
+            "255.255.255.252", "255.255.255.254", "255.255.255.255",
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(validate_netmask(value), value)
+
+    def test_invalid_static_configuration_never_reaches_uart(self):
+        invalid = [
+            (address, "255.255.255.0", "-")
+            for address in (
+                "0.1.2.3", "127.0.0.1", "169.254.1.2", "224.0.0.1",
+                "240.0.0.1", "255.255.255.255", "192.0.2.0", "192.0.2.255",
+            )
+        ]
+        invalid.extend(
+            ("192.0.2.50", mask, "-")
+            for mask in ("0.0.0.255", "0.0.0.0", "255.255.255.254", "255.255.255.255")
+        )
+        invalid.extend(
+            ("192.0.2.50", "255.255.255.0", gateway)
+            for gateway in (
+                "198.51.100.1", "192.0.2.0", "192.0.2.255",
+                "0.0.0.0", "127.0.0.1", "169.254.1.1", "224.0.0.1",
+            )
+        )
+        for address, mask, gateway in invalid:
+            with self.subTest(address=address, mask=mask, gateway=gateway):
+                console = FakeConsole()
+                with self.assertRaises(ToolkitError):
+                    NetworkProvisioner(console).stage_static(address, mask, gateway)
+                self.assertEqual(console.commands, [])
+
+    def test_valid_static_configuration_normalizes_optional_gateway(self):
+        for gateway in ("", "-", "none", "NONE", " - "):
+            with self.subTest(gateway=gateway):
+                console = FakeConsole()
+                NetworkProvisioner(console).stage_static(
+                    " 192.0.2.50 ", " 255.255.255.0 ", gateway,
+                    "1.1.1.1", "169.254.1.1",
+                )
+                self.assertEqual(console.commands, [
+                    "network static 192.0.2.50 255.255.255.0 - 1.1.1.1 169.254.1.1"
+                ])
+
+    def test_static_host_boundaries_follow_the_selected_subnet(self):
+        for address, mask, gateway in (
+            ("192.0.2.1", "255.255.255.252", "192.0.2.2"),
+            ("192.0.2.255", "255.255.254.0", "192.0.3.0"),
+            ("8.8.8.8", "128.0.0.0", "1.1.1.1"),
+        ):
+            with self.subTest(address=address, mask=mask, gateway=gateway):
+                console = FakeConsole()
+                NetworkProvisioner(console).stage_static(address, mask, gateway)
+                self.assertEqual(console.commands, [
+                    f"network static {address} {mask} {gateway} - -"
+                ])
+
     def test_device_error_is_not_silently_accepted(self):
         console = FakeConsole(
             {"network apply": "network apply result=ESP_ERR_INVALID_STATE"}

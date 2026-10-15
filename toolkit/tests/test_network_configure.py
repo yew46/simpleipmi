@@ -196,6 +196,27 @@ class NetworkConfigureTests(unittest.TestCase):
             )
         self.assertNotIn("apply", provisioner.calls)
 
+    def test_invalid_static_configuration_does_not_stage_hostname(self) -> None:
+        for mask, gateway in (
+            ("0.0.0.255", "-"),
+            ("0.0.0.0", "-"),
+            ("255.255.255.0", "198.51.100.1"),
+            ("255.255.255.0", "192.0.2.0"),
+            ("255.255.255.0", "192.0.2.255"),
+        ):
+            with self.subTest(mask=mask, gateway=gateway):
+                provisioner = FakeProvisioner()
+                with self.assertRaises(ToolkitError):
+                    configure_network(
+                        provisioner,
+                        NetworkConfiguration(
+                            mode="static", hostname="exoanchor-renamed",
+                            address="192.0.2.240", netmask=mask, gateway=gateway,
+                        ),
+                        transport="uart", target="/dev/test",
+                    )
+                self.assertEqual(provisioner.calls, ["show"])
+
     def test_invalid_safety_options_are_rejected_before_device_access(self) -> None:
         provisioner = FakeProvisioner()
         with self.assertRaisesRegex(ToolkitError, "between 0.1 and 110"):

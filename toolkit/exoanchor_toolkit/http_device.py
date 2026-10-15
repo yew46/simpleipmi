@@ -20,7 +20,7 @@ from .network import (
     NetworkSnapshot,
     validate_hostname,
     validate_ipv4,
-    validate_netmask,
+    validate_static_network,
 )
 
 
@@ -420,11 +420,12 @@ class HttpNetworkProvisioner:
         dns_primary: str = "-",
         dns_secondary: str = "-",
     ) -> str:
+        address, netmask, gateway = validate_static_network(address, netmask, gateway)
         return self._action(
             "static",
-            address=validate_ipv4(address, "address"),
-            netmask=validate_netmask(netmask),
-            gateway=validate_ipv4(gateway, "gateway", optional=True),
+            address=address,
+            netmask=netmask,
+            gateway=gateway,
             dns_primary=validate_ipv4(
                 dns_primary, "primary DNS", optional=True
             ),

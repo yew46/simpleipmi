@@ -55,10 +55,44 @@ def validate_ipv4(value: str, field: str, *, optional: bool = False) -> str:
 def validate_netmask(value: str) -> str:
     value = validate_ipv4(value, "netmask")
     try:
-        ipaddress.IPv4Network(f"0.0.0.0/{value}")
+        network = ipaddress.IPv4Network(f"0.0.0.0/{value}")
     except ValueError as exc:
         raise ToolkitError(f"netmask is not contiguous: {value}") from exc
+    # IPv4Network also accepts inverse hostmasks, which the device does not.
+    if str(network.netmask) != value or network.prefixlen == 0:
+        raise ToolkitError(
+            f"netmask must be a nonzero contiguous subnet mask: {value}"
+        )
     return value
+
+
+def validate_static_network(
+    address: str, netmask: str, gateway: str = "-"
+) -> tuple[str, str, str]:
+    """Validate static IPv4 settings against the firmware's host/subnet rules."""
+    address = validate_ipv4(address, "address")
+    netmask = validate_netmask(netmask)
+    gateway = validate_ipv4(gateway, "gateway", optional=True)
+    subnet = ipaddress.IPv4Network(f"{address}/{netmask}", strict=False)
+
+    def validate_host(value: str, field: str) -> None:
+        host = ipaddress.IPv4Address(value)
+        first_octet = host.packed[0]
+        # Match firmware ipv4_unicast(..., false), rather than excluding
+        # otherwise usable public or documentation addresses via is_global.
+        if first_octet in {0, 127} or first_octet >= 224 or host.is_link_local:
+            raise ToolkitError(
+                f"{field} must be a unicast IPv4 address outside the link-local range"
+            )
+        if host not in subnet:
+            raise ToolkitError(f"{field} must be in the same subnet as address")
+        if host in {subnet.network_address, subnet.broadcast_address}:
+            raise ToolkitError(f"{field} must not be the network or broadcast address")
+
+    validate_host(address, "address")
+    if gateway != "-":
+        validate_host(gateway, "gateway")
+    return address, netmask, gateway
 
 
 def parse_network_show(output: str) -> NetworkSnapshot:
@@ -118,9 +152,7 @@ class NetworkProvisioner:
         dns_primary: str = "-",
         dns_secondary: str = "-",
     ) -> str:
-        address = validate_ipv4(address, "address")
-        netmask = validate_netmask(netmask)
-        gateway = validate_ipv4(gateway, "gateway", optional=True)
+        address, netmask, gateway = validate_static_network(address, netmask, gateway)
         dns_primary = validate_ipv4(dns_primary, "primary DNS", optional=True)
         dns_secondary = validate_ipv4(dns_secondary, "secondary DNS", optional=True)
         command = (

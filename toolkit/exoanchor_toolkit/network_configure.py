@@ -16,7 +16,7 @@ from .network import (
     NetworkSnapshot,
     validate_hostname,
     validate_ipv4,
-    validate_netmask,
+    validate_static_network,
 )
 
 
@@ -98,10 +98,10 @@ def _stage_configuration(
     if not configuration.netmask.strip():
         raise ToolkitError("netmask is required for static network mode")
 
-    address = validate_ipv4(configuration.address, "address")
-    netmask = validate_netmask(configuration.netmask)
-    gateway = validate_ipv4(
-        configuration.gateway or "-", "gateway", optional=True
+    address, netmask, gateway = validate_static_network(
+        configuration.address,
+        configuration.netmask,
+        configuration.gateway or "-",
     )
     dns_primary = validate_ipv4(
         configuration.dns_primary or "-", "primary DNS", optional=True
