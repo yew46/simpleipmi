@@ -122,6 +122,28 @@ flash_authorization = "allowed only after exact identity recheck"
                 with self.assertRaisesRegex(ToolkitError, "unsupported.*schema"):
                     load_firmware_package(manifest)
 
+    def test_firmware_identity_fields_require_text(self):
+        manifest = create_firmware_package(self.build, self.root / "package")
+        original = json.loads(manifest.read_text(encoding="utf-8"))
+        for field in ("version", "board"):
+            for value in (None, True, 123, [], {}, "", "  "):
+                with self.subTest(field=field, value=value):
+                    data = json.loads(json.dumps(original))
+                    data["firmware"][field] = value
+                    manifest.write_text(json.dumps(data), encoding="utf-8")
+                    with self.assertRaisesRegex(ToolkitError, "must be non-empty"):
+                        load_firmware_package(manifest)
+
+    def test_invalid_build_version_does_not_create_package(self):
+        project = self.build / "project_description.json"
+        data = json.loads(project.read_text(encoding="utf-8"))
+        data["project_version"] = None
+        project.write_text(json.dumps(data), encoding="utf-8")
+        output = self.root / "package"
+        with self.assertRaisesRegex(ToolkitError, "version must be"):
+            create_firmware_package(self.build, output)
+        self.assertFalse(output.exists())
+
     def test_package_refuses_overwrite(self):
         output = self.root / "package"
         output.mkdir()

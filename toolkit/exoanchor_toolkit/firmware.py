@@ -148,8 +148,11 @@ def load_firmware_package(package: str | Path) -> FirmwarePackage:
     if not isinstance(segments_raw, list) or not segments_raw:
         raise ToolkitError("manifest must contain at least one firmware segment")
 
-    version = str(firmware.get("version", "")).strip()
-    board = str(firmware.get("board", "")).strip()
+    version = firmware.get("version")
+    board = firmware.get("board")
+    if not isinstance(version, str) or not isinstance(board, str):
+        raise ToolkitError("firmware version and board must be non-empty strings")
+    version, board = version.strip(), board.strip()
     chip = str(firmware.get("chip", "")).strip().lower()
     flash_size = str(firmware.get("flash_size", "")).strip()
     if not version or not board:
@@ -321,7 +324,10 @@ def create_firmware_package(build_dir: str | Path, output_dir: str | Path) -> Pa
         raise ToolkitError("ESP-IDF flasher_args.json is incomplete")
 
     chip = str(project.get("target", "")).lower()
-    version = str(project.get("project_version", "")).strip()
+    version = project.get("project_version")
+    if not isinstance(version, str):
+        raise ToolkitError("build firmware version must be a non-empty string")
+    version = version.strip()
     board = _read_sdkconfig_value(sdkconfig_path, "CONFIG_SI_BOARD_ID")
     flash_size = str(settings.get("flash_size", "")).strip()
     if chip != "esp32p4" or not version or not board:
