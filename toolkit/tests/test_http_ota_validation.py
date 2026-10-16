@@ -22,21 +22,21 @@ class OtaValidationTests(unittest.TestCase):
             segments=[SimpleNamespace(address=0x20000, path=path, sha256=self.sha256)],
         )
 
-    def client(self, *, active=False, offset=0, start_offset=0):
+    def client(self, *, active=False, offset=0, start_offset=0, session_id="upload"):
         client = Mock()
         client.get_json.side_effect = [
             {"device": {"board": self.package.board}},
-            self.status(active=active, offset=offset),
+            self.status(active=active, offset=offset, session_id=session_id),
         ]
         client.post_json.side_effect = lambda path, body: (
-            {"ok": True, "session_id": "upload", "offset": start_offset}
+            {"ok": True, "session_id": session_id, "offset": start_offset}
             if path.endswith("/start") else {"sha256": self.sha256}
         )
         client.post_binary.return_value = {"ok": True, "offset": self.size}
         return client
 
-    def status(self, *, active=True, offset=0):
-        return {"active": active, "session_id": "upload", "offset": offset,
+    def status(self, *, active=True, offset=0, session_id="upload"):
+        return {"active": active, "session_id": session_id, "offset": offset,
                 "size": self.size, "sha256": self.sha256}
 
     def assert_no_finish(self, client):
@@ -89,6 +89,28 @@ class OtaValidationTests(unittest.TestCase):
                     f"/api/ota/upload/chunk?session=upload&offset={offset}", b"firmware"[offset:]
                 )
                 self.assertEqual(client.post_json.call_args.args[0], "/api/ota/upload/finish")
+
+    def test_invalid_start_and_resume_sessions_never_send_chunks(self):
+        for session_id in (None, "", "   ", True, 123, ["upload"], {"id": "upload"}):
+            for active in (False, True):
+                with self.subTest(session_id=session_id, active=active):
+                    client = self.client(active=active, session_id=session_id)
+                    with self.assertRaises(ToolkitError):
+                        NetworkOtaUpdater(client).update(self.package, reboot=False)
+                    client.post_binary.assert_not_called()
+                    self.assert_no_finish(client)
+
+    def test_valid_session_is_preserved_and_encoded_in_chunk_url(self):
+        for active in (False, True):
+            with self.subTest(active=active):
+                client = self.client(active=active, session_id="upload /?&")
+                NetworkOtaUpdater(client).update(self.package, reboot=False)
+                client.post_binary.assert_called_once_with(
+                    "/api/ota/upload/chunk?session=upload%20%2F%3F%26&offset=0", b"firmware"
+                )
+                client.post_json.assert_called_with(
+                    "/api/ota/upload/finish", {"session_id": "upload /?&"}
+                )
 
 
 if __name__ == "__main__":

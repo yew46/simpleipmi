@@ -494,6 +494,7 @@ class NetworkOtaUpdater:
                 status_sha != segment.sha256
                 or status_size != len(payload)
                 or not isinstance(status_session, str)
+                or not status_session.strip()
                 or type(status_offset) is not int
                 or not 0 <= status_offset <= len(payload)
             ):
@@ -508,9 +509,13 @@ class NetworkOtaUpdater:
                 "/api/ota/upload/start",
                 {"size": len(payload), "sha256": segment.sha256},
             )
-            session_id = str(started.get("session_id") or "")
+            session_id = started.get("session_id")
             offset_value = started.get("offset")
-            if started.get("ok") is not True or not session_id:
+            if (
+                started.get("ok") is not True
+                or not isinstance(session_id, str)
+                or not session_id.strip()
+            ):
                 raise ToolkitError("device did not create an OTA upload session")
             if type(offset_value) is not int or offset_value != 0:
                 raise ToolkitError("device returned an invalid OTA start offset")
