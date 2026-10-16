@@ -494,7 +494,7 @@ class NetworkOtaUpdater:
                 status_sha != segment.sha256
                 or status_size != len(payload)
                 or not isinstance(status_session, str)
-                or not isinstance(status_offset, int)
+                or type(status_offset) is not int
                 or not 0 <= status_offset <= len(payload)
             ):
                 raise ToolkitError(
@@ -512,7 +512,7 @@ class NetworkOtaUpdater:
             offset_value = started.get("offset")
             if started.get("ok") is not True or not session_id:
                 raise ToolkitError("device did not create an OTA upload session")
-            if not isinstance(offset_value, int) or offset_value != 0:
+            if type(offset_value) is not int or offset_value != 0:
                 raise ToolkitError("device returned an invalid OTA start offset")
             offset = offset_value
 
@@ -539,7 +539,7 @@ class NetworkOtaUpdater:
                 if (
                     recovered.get("active") is True
                     and recovered.get("session_id") == session_id
-                    and isinstance(recovered_offset, int)
+                    and type(recovered_offset) is int
                     and offset < recovered_offset <= end
                 ):
                     offset = recovered_offset
@@ -548,7 +548,7 @@ class NetworkOtaUpdater:
             next_offset = chunk_result.get("offset")
             if (
                 chunk_result.get("ok") is not True
-                or not isinstance(next_offset, int)
+                or type(next_offset) is not int
                 or not offset < next_offset <= end
             ):
                 raise ToolkitError("device returned an invalid OTA chunk offset")
