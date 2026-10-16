@@ -56,6 +56,12 @@ class _FakeSerialModule:
 
 
 class DiagnosticConsoleTests(unittest.TestCase):
+    def test_timeout_must_be_finite_and_positive(self):
+        for timeout in (float("nan"), float("inf"), float("-inf"), 0, -1):
+            with self.subTest(timeout=timeout):
+                with self.assertRaisesRegex(ToolkitError, "serial timeout"):
+                    DiagnosticConsole("/dev/test", timeout=timeout)
+
     def test_sync_acknowledgement_precedes_caller_command(self):
         device = _FakeSerialPort()
         with patch(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 import time
 from dataclasses import dataclass
@@ -39,8 +40,8 @@ class DiagnosticConsole:
     ) -> None:
         if baud <= 0:
             raise ToolkitError("serial baud must be positive")
-        if timeout <= 0:
-            raise ToolkitError("serial timeout must be positive")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ToolkitError("serial timeout must be finite and positive")
         self.port = port
         self.baud = baud
         self.timeout = timeout
