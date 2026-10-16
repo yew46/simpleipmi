@@ -95,10 +95,11 @@ def load_board_identity_credential(
     except (OSError, tomllib.TOMLDecodeError) as exc:
         raise ToolkitError(f"cannot read board identity registry {path}: {exc}") from exc
 
-    if document.get("schema_version") != REGISTRY_SCHEMA_VERSION:
+    schema_version = document.get("schema_version")
+    if type(schema_version) is not int or schema_version != REGISTRY_SCHEMA_VERSION:
         raise ToolkitError(
             "unsupported board identity registry schema: "
-            f"{document.get('schema_version')}"
+            f"{schema_version}"
         )
     records = document.get("boards")
     if not isinstance(records, list):

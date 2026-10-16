@@ -37,6 +37,20 @@ flash_authorization = "{flash_authorization}"
 
 
 class IdentityGateTests(unittest.TestCase):
+    def test_registry_schema_requires_an_integer_version(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "BOARD_IDENTITY_REGISTRY.toml"
+            for version in ("true", "1.0", '"1"', "0", "2"):
+                with self.subTest(version=version):
+                    path.write_text(
+                        _registry_text().replace(
+                            "schema_version = 1", f"schema_version = {version}"
+                        ),
+                        encoding="utf-8",
+                    )
+                    with self.assertRaisesRegex(ToolkitError, "unsupported.*schema"):
+                        load_board_identity_credential(path, "prototype-test")
+
     def test_registry_and_chip_output_supply_all_authoritative_factors(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "BOARD_IDENTITY_REGISTRY.toml"
