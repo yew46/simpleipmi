@@ -166,7 +166,9 @@ def load_firmware_package(package: str | Path) -> FirmwarePackage:
     flash_frequency = str(flash.get("frequency", "")).strip()
     before = str(flash.get("before", "default_reset")).strip()
     after = str(flash.get("after", "hard_reset")).strip()
-    use_stub = bool(flash.get("stub", True))
+    use_stub = flash.get("stub", True)
+    if not isinstance(use_stub, bool):
+        raise ToolkitError("flash stub must be a boolean")
     if flash_mode not in {"dio", "dout", "qio", "qout"}:
         raise ToolkitError(f"unsupported flash mode: {flash_mode}")
     if flash_frequency not in {
@@ -338,6 +340,9 @@ def create_firmware_package(build_dir: str | Path, output_dir: str | Path) -> Pa
         raise ToolkitError(
             f"build is missing required third-party notices: {notices_path}"
         )
+    use_stub = extra.get("stub", True)
+    if not isinstance(use_stub, bool):
+        raise ToolkitError("build flash stub must be a boolean")
 
     normalized: list[tuple[int, Path]] = []
     for address_text, relative_text in flash_files.items():
@@ -381,7 +386,7 @@ def create_firmware_package(build_dir: str | Path, output_dir: str | Path) -> Pa
             "frequency": str(settings.get("flash_freq", "")),
             "before": str(extra.get("before", "default_reset")),
             "after": str(extra.get("after", "hard_reset")),
-            "stub": bool(extra.get("stub", True)),
+            "stub": use_stub,
         },
         "segments": segments,
     }

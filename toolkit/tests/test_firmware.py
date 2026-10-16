@@ -144,6 +144,32 @@ flash_authorization = "allowed only after exact identity recheck"
             create_firmware_package(self.build, output)
         self.assertFalse(output.exists())
 
+    def test_flash_stub_requires_a_boolean(self):
+        manifest = create_firmware_package(self.build, self.root / "package")
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        for value in ("false", "true", 0, 1, None):
+            with self.subTest(stub=value):
+                data["flash"]["stub"] = value
+                manifest.write_text(json.dumps(data), encoding="utf-8")
+                with self.assertRaisesRegex(ToolkitError, "stub must be a boolean"):
+                    load_firmware_package(manifest)
+        data["flash"]["stub"] = False
+        manifest.write_text(json.dumps(data), encoding="utf-8")
+        package = load_firmware_package(manifest)
+        self.assertIn("--no-stub", build_esptool_command(
+            package, "/dev/test", 460800, esptool_major=5
+        ))
+
+    def test_invalid_build_stub_does_not_create_package(self):
+        flasher = self.build / "flasher_args.json"
+        data = json.loads(flasher.read_text(encoding="utf-8"))
+        data["extra_esptool_args"]["stub"] = "false"
+        flasher.write_text(json.dumps(data), encoding="utf-8")
+        output = self.root / "package"
+        with self.assertRaisesRegex(ToolkitError, "stub must be a boolean"):
+            create_firmware_package(self.build, output)
+        self.assertFalse(output.exists())
+
     def test_package_refuses_overwrite(self):
         output = self.root / "package"
         output.mkdir()
