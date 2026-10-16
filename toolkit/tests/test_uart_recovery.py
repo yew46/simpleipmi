@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock
 
 from exoanchor_toolkit.errors import ToolkitError
 from exoanchor_toolkit.ports import PortInfo
@@ -30,6 +31,26 @@ class StepClock:
 
 
 class UartRuntimeRecoveryTests(unittest.TestCase):
+    def test_timeouts_must_be_finite_before_device_discovery(self):
+        original = port("/dev/cu.test", "board-a")
+        for field in ("timeout", "probe_timeout"):
+            for value in (float("nan"), float("inf"), float("-inf"), 0, -1):
+                with self.subTest(field=field, value=value):
+                    provider = Mock(
+                        side_effect=AssertionError("unexpected device discovery")
+                    )
+                    with self.assertRaisesRegex(
+                        ToolkitError, "timeout must be.*positive"
+                    ):
+                        wait_for_uart_runtime(
+                            original,
+                            expected_version="0.87.3-dev",
+                            expected_board="exoanchor-prototype-v2.3",
+                            ports_provider=provider,
+                            **{field: value},
+                        )
+                    provider.assert_not_called()
+
     def test_reenumeration_ignores_other_board_and_verifies_runtime(self):
         original = port("/dev/cu.old", "board-a")
         other = port("/dev/cu.other", "board-b")

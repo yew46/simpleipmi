@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Callable, Iterable
 
@@ -25,8 +26,13 @@ def wait_for_uart_runtime(
     sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, object]:
     """Wait for the flashed board to return and prove the new runtime booted."""
-    if timeout <= 0 or probe_timeout <= 0:
-        raise ToolkitError("UART runtime verification timeout must be positive")
+    if any(
+        not math.isfinite(value) or value <= 0
+        for value in (timeout, probe_timeout)
+    ):
+        raise ToolkitError(
+            "UART runtime verification timeout must be finite and positive"
+        )
     provide_ports = ports_provider or list_serial_ports
     identify = identify_device or identify_uart_device
     deadline = monotonic() + timeout
