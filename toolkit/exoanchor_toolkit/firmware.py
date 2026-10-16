@@ -217,10 +217,9 @@ def load_firmware_package(package: str | Path) -> FirmwarePackage:
         if not path.is_file() or actual_size <= 0:
             raise ToolkitError(f"firmware segment is empty or not a file: {path}")
 
-        try:
-            expected_size = int(item.get("size"))
-        except (TypeError, ValueError) as exc:
-            raise ToolkitError(f"invalid size for segment 0x{address:x}") from exc
+        expected_size = item.get("size")
+        if type(expected_size) is not int or expected_size <= 0:
+            raise ToolkitError(f"invalid size for segment 0x{address:x}: must be a positive integer")
         expected_hash = str(item.get("sha256", "")).lower()
         if expected_size != actual_size:
             raise ToolkitError(

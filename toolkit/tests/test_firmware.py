@@ -170,6 +170,18 @@ flash_authorization = "allowed only after exact identity recheck"
             create_firmware_package(self.build, output)
         self.assertFalse(output.exists())
 
+    def test_segment_size_requires_a_positive_integer(self):
+        manifest = create_firmware_package(self.build, self.root / "package")
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        size = data["segments"][0]["size"]
+        for value in (size + 0.9, float(size), str(size), True, None,
+                      0, -1, float("inf"), float("nan")):
+            with self.subTest(size=value):
+                data["segments"][0]["size"] = value
+                manifest.write_text(json.dumps(data), encoding="utf-8")
+                with self.assertRaisesRegex(ToolkitError, "invalid size"):
+                    load_firmware_package(manifest)
+
     def test_package_refuses_overwrite(self):
         output = self.root / "package"
         output.mkdir()
