@@ -52,6 +52,16 @@ def validate_ipv4(value: str, field: str, *, optional: bool = False) -> str:
         raise ToolkitError(f"{field} is not a valid IPv4 address: {value}") from exc
 
 
+def validate_dns(value: str, field: str) -> str:
+    value = validate_ipv4(value, field, optional=True)
+    if value != "-":
+        first_octet = ipaddress.IPv4Address(value).packed[0]
+        # Firmware accepts link-local DNS, but excludes non-unicast ranges.
+        if first_octet in {0, 127} or first_octet >= 224:
+            raise ToolkitError(f"{field} must be a unicast IPv4 address")
+    return value
+
+
 def validate_netmask(value: str) -> str:
     value = validate_ipv4(value, "netmask")
     try:
@@ -153,8 +163,8 @@ class NetworkProvisioner:
         dns_secondary: str = "-",
     ) -> str:
         address, netmask, gateway = validate_static_network(address, netmask, gateway)
-        dns_primary = validate_ipv4(dns_primary, "primary DNS", optional=True)
-        dns_secondary = validate_ipv4(dns_secondary, "secondary DNS", optional=True)
+        dns_primary = validate_dns(dns_primary, "primary DNS")
+        dns_secondary = validate_dns(dns_secondary, "secondary DNS")
         command = (
             f"network static {address} {netmask} {gateway} "
             f"{dns_primary} {dns_secondary}"

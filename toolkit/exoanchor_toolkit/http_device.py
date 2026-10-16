@@ -19,7 +19,7 @@ from .firmware import FirmwarePackage
 from .network import (
     NetworkSnapshot,
     validate_hostname,
-    validate_ipv4,
+    validate_dns,
     validate_static_network,
 )
 
@@ -426,11 +426,11 @@ class HttpNetworkProvisioner:
             address=address,
             netmask=netmask,
             gateway=gateway,
-            dns_primary=validate_ipv4(
-                dns_primary, "primary DNS", optional=True
+            dns_primary=validate_dns(
+                dns_primary, "primary DNS"
             ),
-            dns_secondary=validate_ipv4(
-                dns_secondary, "secondary DNS", optional=True
+            dns_secondary=validate_dns(
+                dns_secondary, "secondary DNS"
             ),
         )
 

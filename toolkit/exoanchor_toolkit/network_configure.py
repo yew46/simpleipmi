@@ -15,7 +15,7 @@ from .http_device import DeviceHttpClient, HttpNetworkProvisioner
 from .network import (
     NetworkSnapshot,
     validate_hostname,
-    validate_ipv4,
+    validate_dns,
     validate_static_network,
 )
 
@@ -103,11 +103,11 @@ def _stage_configuration(
         configuration.netmask,
         configuration.gateway or "-",
     )
-    dns_primary = validate_ipv4(
-        configuration.dns_primary or "-", "primary DNS", optional=True
+    dns_primary = validate_dns(
+        configuration.dns_primary or "-", "primary DNS"
     )
-    dns_secondary = validate_ipv4(
-        configuration.dns_secondary or "-", "secondary DNS", optional=True
+    dns_secondary = validate_dns(
+        configuration.dns_secondary or "-", "secondary DNS"
     )
     output: list[str] = []
     if hostname:
