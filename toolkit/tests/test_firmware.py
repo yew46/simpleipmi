@@ -112,6 +112,16 @@ flash_authorization = "allowed only after exact identity recheck"
             {0x2000, 0x8000, 0xF000, 0x20000},
         )
 
+    def test_schema_version_requires_an_integer(self):
+        manifest = create_firmware_package(self.build, self.root / "package")
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        for value in (True, 1.0, "1", None, 0, 2):
+            with self.subTest(schema_version=value):
+                data["schema_version"] = value
+                manifest.write_text(json.dumps(data), encoding="utf-8")
+                with self.assertRaisesRegex(ToolkitError, "unsupported.*schema"):
+                    load_firmware_package(manifest)
+
     def test_package_refuses_overwrite(self):
         output = self.root / "package"
         output.mkdir()

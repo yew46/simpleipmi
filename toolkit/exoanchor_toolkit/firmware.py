@@ -130,7 +130,10 @@ def _manifest_path(package: str | Path) -> Path:
 def load_firmware_package(package: str | Path) -> FirmwarePackage:
     manifest_path = _manifest_path(package)
     raw = _read_json(manifest_path)
-    if raw.get("schema_version") != SCHEMA_VERSION:
+    if (
+        type(raw.get("schema_version")) is not int
+        or raw["schema_version"] != SCHEMA_VERSION
+    ):
         raise ToolkitError(
             f"unsupported firmware manifest schema: {raw.get('schema_version')}"
         )
