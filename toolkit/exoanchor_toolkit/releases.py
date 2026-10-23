@@ -323,19 +323,27 @@ def firmware_release_by_tag(
     requested = tag.strip()
     if not requested:
         raise ToolkitError("firmware release tag is required")
-    releases = firmware_releases(
-        repository,
-        include_prerelease=include_prerelease,
-        token=token,
-        opener=opener,
+    repository = validate_repository(repository)
+    unavailable = f"firmware release {requested} is not available in {repository}"
+    # A requested tag may be older than the first page of release listings.
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{repository}/releases/tags/"
+        + urllib.parse.quote(requested, safe=""),
+        headers=_headers(token),
     )
-    for release in releases:
-        if release.tag == requested:
-            return release
-    raise ToolkitError(
-        f"firmware release {requested} is not available in "
-        f"{validate_repository(repository)}"
+    try:
+        payload = _read_json_response(request, opener=opener)
+    except ToolkitError as exc:
+        cause = exc.__cause__
+        if isinstance(cause, urllib.error.HTTPError) and cause.code == 404:
+            raise ToolkitError(unavailable) from exc
+        raise
+    release = _release_from_json(
+        payload, include_prerelease=include_prerelease
     )
+    if release is None or release.tag != requested:
+        raise ToolkitError(unavailable)
+    return release
 
 
 def _safe_target_name(release: FirmwareRelease) -> str:

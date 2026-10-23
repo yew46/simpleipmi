@@ -177,12 +177,12 @@ class ReleaseTests(unittest.TestCase):
         selected = firmware_release_by_tag(
             "wxffxx/ExoAnchor",
             "firmware-v0.87.2",
-            opener=self._opener(encoded),
+            opener=self._opener(json.dumps(older).encode()),
         )
         self.assertEqual(selected.name, "P4 IndigoShore v0.87.2")
 
     def test_unknown_release_tag_is_rejected(self) -> None:
-        payload = json.dumps(self._release_payload()).encode()
+        payload = json.dumps(self._release_payload()[0]).encode()
         with self.assertRaisesRegex(ToolkitError, "is not available"):
             firmware_release_by_tag(
                 "wxffxx/ExoAnchor",
@@ -225,15 +225,24 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(cached.directory, downloaded.directory)
 
     def test_download_can_select_an_exact_release_tag(self) -> None:
-        payload = json.dumps(self._release_payload()).encode()
+        payload = json.dumps(self._release_payload()[0]).encode()
+        requested_urls = []
+
+        def api_opener(request, timeout=0):
+            requested_urls.append(request.full_url)
+            return BytesResponse(payload)
+
         downloaded = download_firmware_release(
             output_dir=self.root / "selected",
             tag="firmware-v0.87.3-dev",
-            api_opener=self._opener(payload),
+            api_opener=api_opener,
             download_opener=self._opener(self.archive),
         )
         self.assertEqual(downloaded.release.tag, "firmware-v0.87.3-dev")
         self.assertEqual(downloaded.package.version, "0.87.3-dev")
+        self.assertEqual(requested_urls, [
+            "https://api.github.com/repos/wxffxx/ExoAnchor/releases/tags/firmware-v0.87.3-dev"
+        ])
 
     def test_release_zip_can_be_opened_directly(self) -> None:
         archive = self.root / "release.zip"

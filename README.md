@@ -187,6 +187,22 @@ Verify that the Dashboard opens, Ethernet has an address, KVM video is present,
 and HID works. First boot requires replacing the local bootstrap credential;
 shared documentation does not publish its value.
 
+### Download a specific packaged firmware release
+
+With the Toolkit installed (`python -m pip install ./toolkit`), download a
+published firmware package by its exact release tag:
+
+```bash
+exoanchor-toolkit firmware download '<release-tag>' --output ./firmware-downloads
+```
+
+Replace `<release-tag>` with the tag shown on GitHub Releases. The Toolkit
+looks up that tag directly, including releases older than the most recent 30.
+Use `--stable-only` to reject prereleases or `--repository owner/name` to select
+another repository. The release must contain one compatible firmware package;
+archive and firmware integrity checks still apply. Downloading does not flash
+the device.
+
 ## Repository layout
 
 ```text
