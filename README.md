@@ -203,6 +203,11 @@ another repository. The release must contain one compatible firmware package;
 archive and firmware integrity checks still apply. Downloading does not flash
 the device.
 
+If an archive cannot be extracted, the Toolkit reports an error and discards
+the temporary extraction. Use an unencrypted ZIP with a compression method
+supported by your Python installation. For damaged archives, download a fresh
+copy from the release page before retrying.
+
 ## Repository layout
 
 ```text

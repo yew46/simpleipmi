@@ -22,6 +22,23 @@ from .errors import ToolkitError
 from .firmware import MANIFEST_NAME, FirmwarePackage, load_firmware_package
 
 
+# Match zipfile's optional codec support: stored ZIPs need neither module.
+try:
+    import zlib
+except ImportError:
+    zlib = None
+try:
+    import lzma
+except ImportError:
+    lzma = None
+
+_ARCHIVE_READ_ERRORS = (OSError, EOFError, RuntimeError, zipfile.BadZipFile)
+if zlib is not None:
+    _ARCHIVE_READ_ERRORS += (zlib.error,)
+if lzma is not None:
+    _ARCHIVE_READ_ERRORS += (lzma.LZMAError,)
+
+
 DEFAULT_GITHUB_REPOSITORY = "wxffxx/ExoAnchor"
 GITHUB_API_VERSION = "2022-11-28"
 MAX_RELEASE_RESPONSE_BYTES = 2 * 1024 * 1024
@@ -457,7 +474,7 @@ def _extract_archive(archive: Path, destination: Path) -> Path:
                     shutil.copyfileobj(source, target, length=1024 * 1024)
     except ToolkitError:
         raise
-    except (OSError, zipfile.BadZipFile) as exc:
+    except _ARCHIVE_READ_ERRORS as exc:
         raise ToolkitError(f"cannot extract firmware archive: {exc}") from exc
     manifests = list(destination.rglob(MANIFEST_NAME))
     if len(manifests) != 1:
