@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -19,7 +20,7 @@ from pathlib import Path, PurePosixPath
 from typing import Callable, Iterator
 
 from .errors import ToolkitError
-from .firmware import MANIFEST_NAME, FirmwarePackage, load_firmware_package
+from .firmware import MANIFEST_NAME, FirmwarePackage, load_firmware_package, sha256_file
 
 
 # Match zipfile's optional codec support: stored ZIPs need neither module.
@@ -393,6 +394,34 @@ def _load_cached(
     return package
 
 
+def _publish_package(
+    staged: Path, manifest: Path, target: Path, release: FirmwareRelease
+) -> tuple[FirmwarePackage, bool]:
+    relative = manifest.relative_to(staged)
+    try:
+        staged.rename(target)
+    except OSError as exc:
+        if exc.errno not in (errno.EEXIST, errno.ENOTEMPTY):
+            raise ToolkitError(f"cannot publish firmware cache at {target}: {exc}") from exc
+        # Another download may have published this release after our first
+        # cache lookup. Recheck its image hashes and the exact manifest before
+        # discarding our staged copy; a directory name alone is not enough.
+        try:
+            winner = _load_cached(target, release)
+            if (
+                winner is None
+                or winner.manifest_path != target / relative
+                or sha256_file(winner.manifest_path) != sha256_file(manifest)
+            ):
+                raise ToolkitError(
+                    f"firmware cache does not match downloaded package: {target}"
+                ) from exc
+        except OSError as read_error:
+            raise ToolkitError(f"cannot verify firmware cache at {target}: {read_error}") from read_error
+        return winner, True
+    return load_firmware_package(target / relative), False
+
+
 def _download_archive(
     asset: ReleaseAsset,
     destination: Path,
@@ -567,9 +596,7 @@ def download_firmware_release(
                     f"firmware package version {package.version} does not match "
                     f"release {release.tag}"
                 )
-            manifest_relative = manifest.relative_to(extracted)
-            extracted.rename(target)
-            package = load_firmware_package(target / manifest_relative)
+            package, reused = _publish_package(extracted, manifest, target, release)
     except FileExistsError as exc:
         raise ToolkitError(f"firmware cache target already exists: {target}") from exc
     return DownloadedFirmware(
@@ -577,8 +604,8 @@ def download_firmware_release(
         release=release,
         package=package,
         directory=target,
-        archive_sha256=actual_digest,
-        cached=False,
+        archive_sha256=actual_digest if not reused or release.asset.digest else "",
+        cached=reused,
     )
 
 

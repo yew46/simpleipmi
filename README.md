@@ -208,6 +208,13 @@ the temporary extraction. Use an unencrypted ZIP with a compression method
 supported by your Python installation. For damaged archives, download a fresh
 copy from the release page before retrying.
 
+Concurrent downloads of the same release can share an output directory. If one
+finishes first, the other verifies the cached images and checks that the
+manifest matches its own download before reusing the package. If these checks
+fail, the Toolkit reports the error and leaves the existing package in place.
+After an interrupted transfer,
+rerun the download command; an incomplete archive is not used as a cache hit.
+
 ## Repository layout
 
 ```text

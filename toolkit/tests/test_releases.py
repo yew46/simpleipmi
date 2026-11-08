@@ -224,6 +224,97 @@ class ReleaseTests(unittest.TestCase):
         self.assertTrue(cached.cached)
         self.assertEqual(cached.directory, downloaded.directory)
 
+    def _download_while_another_publishes(self, destination, on_publish, *, declared_digest=True):
+        releases = self._release_payload()
+        if not declared_digest:
+            del releases[0]["assets"][0]["digest"]
+        api_opener = self._opener(json.dumps(releases).encode())
+
+        def outer_asset_opener(request, timeout=0):
+            # The first download has already missed the cache. Let a second
+            # download publish its complete package before the first continues.
+            winner = download_latest_firmware(
+                output_dir=destination, api_opener=api_opener,
+                download_opener=self._opener(self.archive),
+            )
+            on_publish(winner)
+            return BytesResponse(self.archive)
+
+        return download_latest_firmware(
+            output_dir=destination, api_opener=api_opener, download_opener=outer_asset_opener,
+        )
+
+    def test_overlapping_downloads_reuse_the_verified_winner(self) -> None:
+        for declared_digest in (True, False):
+            with self.subTest(declared_digest=declared_digest):
+                destination = self.root.resolve() / f"downloads-{declared_digest}"
+                published = []
+                other = self._download_while_another_publishes(
+                    destination, published.append, declared_digest=declared_digest,
+                )
+                winner, = published
+                self.assertFalse(winner.cached)
+                self.assertTrue(other.cached)
+                self.assertEqual(other.directory, winner.directory)
+                self.assertEqual(other.package.manifest_path, winner.package.manifest_path)
+                self.assertTrue(other.package.manifest_path.is_file())
+                self.assertEqual(winner.archive_sha256, self.digest)
+                self.assertEqual(other.archive_sha256, self.digest if declared_digest else "")
+                self.assertEqual(list(destination.iterdir()), [winner.directory])
+
+    def test_overlapping_download_rejects_and_preserves_corrupt_winner(self) -> None:
+        destination = self.root.resolve() / "downloads"
+        published = []
+
+        def corrupt_segment(winner):
+            published.append(winner)
+            segment = winner.package.segments[0]
+            segment.path.write_bytes(b"\xff" * segment.size)
+
+        with self.assertRaisesRegex(ToolkitError, "SHA-256 mismatch"):
+            self._download_while_another_publishes(destination, corrupt_segment)
+        winner, = published
+        segment = winner.package.segments[0]
+        self.assertEqual(segment.path.read_bytes(), b"\xff" * segment.size)
+        self.assertEqual(list(destination.iterdir()), [winner.directory])
+
+    def test_different_valid_manifest_is_not_reused_after_a_collision(self) -> None:
+        destination = self.root.resolve() / "downloads"
+        published = []
+
+        def change_board(winner):
+            manifest = winner.package.manifest_path
+            contents = json.loads(manifest.read_text(encoding="utf-8"))
+            contents["firmware"]["board"] = "different-board"
+            manifest.write_text(json.dumps(contents), encoding="utf-8")
+            published.append(winner)
+
+        with self.assertRaisesRegex(ToolkitError, "does not match downloaded package"):
+            self._download_while_another_publishes(destination, change_board)
+        winner, = published
+        with open_firmware_package(winner.package.manifest_path) as package:
+            self.assertEqual(package.version, winner.package.version)
+            self.assertEqual(package.board, "different-board")
+        self.assertEqual(list(destination.iterdir()), [winner.directory])
+
+    def test_retry_after_truncated_download_publishes_a_clean_package(self) -> None:
+        destination = self.root.resolve() / "downloads"
+        api_opener = self._opener(json.dumps(self._release_payload()).encode())
+        with self.assertRaisesRegex(ToolkitError, "size mismatch"):
+            download_latest_firmware(
+                output_dir=destination, api_opener=api_opener,
+                download_opener=self._opener(self.archive[:-1]),
+            )
+        self.assertEqual(list(destination.iterdir()), [])
+        downloaded = download_latest_firmware(
+            output_dir=destination, api_opener=api_opener,
+            download_opener=self._opener(self.archive),
+        )
+        self.assertFalse(downloaded.cached)
+        self.assertEqual(downloaded.archive_sha256, self.digest)
+        self.assertTrue(downloaded.package.manifest_path.is_file())
+        self.assertEqual(list(destination.iterdir()), [downloaded.directory])
+
     def test_download_can_select_an_exact_release_tag(self) -> None:
         payload = json.dumps(self._release_payload()[0]).encode()
         requested_urls = []
