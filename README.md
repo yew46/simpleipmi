@@ -215,6 +215,18 @@ fail, the Toolkit reports the error and leaves the existing package in place.
 After an interrupted transfer,
 rerun the download command; an incomplete archive is not used as a cache hit.
 
+### Package a local firmware build
+
+```bash
+exoanchor-toolkit firmware package '<build-dir>' './firmware-package'
+```
+
+The Toolkit copies the build images and validates their layout and hashes. If
+copying or validation fails, it removes the incomplete output it created so you
+can fix the build and rerun the same command. Existing output directories are
+preserved. If cleanup itself fails, the error identifies the incomplete directory
+that needs attention before retrying.
+
 ## Repository layout
 
 ```text

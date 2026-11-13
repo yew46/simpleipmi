@@ -1,5 +1,6 @@
 import hashlib
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -185,8 +186,115 @@ flash_authorization = "allowed only after exact identity recheck"
     def test_package_refuses_overwrite(self):
         output = self.root / "package"
         output.mkdir()
+        sentinel = output / "keep.bin"
+        sentinel.write_bytes(b"existing package")
         with self.assertRaisesRegex(ToolkitError, "refusing to overwrite"):
             create_firmware_package(self.build, output)
+        self.assertEqual(sentinel.read_bytes(), b"existing package")
+
+    def test_invalid_flash_settings_are_cleaned_up_before_retry(self):
+        flasher = self.build / "flasher_args.json"
+        original = flasher.read_text(encoding="utf-8")
+        for field in ("flash_mode", "flash_freq", "flash_size"):
+            with self.subTest(field=field):
+                data = json.loads(original)
+                data["flash_settings"][field] = "invalid"
+                flasher.write_text(json.dumps(data), encoding="utf-8")
+                output = self.root / field
+                with self.assertRaisesRegex(ToolkitError, "unsupported flash"):
+                    create_firmware_package(self.build, output)
+                self.assertFalse(output.exists())
+                flasher.write_text(original, encoding="utf-8")
+                manifest = create_firmware_package(self.build, output)
+                self.assertEqual(load_firmware_package(manifest).version, "0.87.3-dev")
+
+    def test_empty_build_image_is_cleaned_up_before_retry(self):
+        image = self.build / OFFSETS["0x2000"]
+        original = image.read_bytes()
+        image.write_bytes(b"")
+        output = self.root / "package"
+        with self.assertRaisesRegex(ToolkitError, "empty"):
+            create_firmware_package(self.build, output)
+        self.assertFalse(output.exists())
+        self.assertEqual(image.read_bytes(), b"")
+        image.write_bytes(original)
+        manifest = create_firmware_package(self.build, output)
+        self.assertEqual(load_firmware_package(manifest).segments[0].path.read_bytes(), original)
+
+    def test_copy_failure_removes_only_the_new_package_and_allows_retry(self):
+        output = self.root / "package"
+        sibling = self.root / "keep.bin"
+        sibling.write_bytes(b"existing data")
+        original_copy = shutil.copyfile
+        calls = []
+
+        def fail_after_copying_files(source, destination, *args, **kwargs):
+            calls.append(destination)
+            if len(calls) == 3:
+                Path(destination).write_bytes(b"partial image")
+                raise OSError("disk full during copy")
+            return original_copy(source, destination, *args, **kwargs)
+
+        with mock.patch("exoanchor_toolkit.firmware.shutil.copyfile", side_effect=fail_after_copying_files):
+            with self.assertRaisesRegex(ToolkitError, "disk full during copy"):
+                create_firmware_package(self.build, output)
+        self.assertEqual(len(calls), 3)
+        self.assertFalse(output.exists())
+        self.assertEqual(sibling.read_bytes(), b"existing data")
+        manifest = create_firmware_package(self.build, output)
+        self.assertEqual(len(load_firmware_package(manifest).segments), 4)
+
+    def test_manifest_write_failure_is_cleaned_up_before_retry(self):
+        output = self.root / "package"
+
+        def fail_write(path, *args, **kwargs):
+            path.write_bytes(b"partial manifest")
+            raise OSError("manifest disk full")
+
+        with mock.patch.object(Path, "write_text", autospec=True, side_effect=fail_write):
+            with self.assertRaisesRegex(ToolkitError, "manifest disk full"):
+                create_firmware_package(self.build, output)
+        self.assertFalse(output.exists())
+        manifest = create_firmware_package(self.build, output)
+        self.assertEqual(load_firmware_package(manifest).version, "0.87.3-dev")
+
+    def test_cancelled_copy_removes_output_and_preserves_cancellation(self):
+        output = self.root / "package"
+        with mock.patch("exoanchor_toolkit.firmware.shutil.copyfile", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                create_firmware_package(self.build, output)
+        self.assertFalse(output.exists())
+        manifest = create_firmware_package(self.build, output)
+        self.assertEqual(load_firmware_package(manifest).version, "0.87.3-dev")
+
+    def test_output_created_by_another_process_is_not_removed(self):
+        output = (self.root / "package").resolve()
+        original_mkdir = Path.mkdir
+
+        def create_competing_output(path, *args, **kwargs):
+            result = original_mkdir(path, *args, **kwargs)
+            if path == output:
+                (path / "keep.bin").write_bytes(b"another process")
+                raise FileExistsError("output appeared before creation")
+            return result
+
+        with mock.patch.object(Path, "mkdir", autospec=True, side_effect=create_competing_output):
+            with self.assertRaises(ToolkitError):
+                create_firmware_package(self.build, output)
+        self.assertEqual(list(output.iterdir()), [output / "keep.bin"])
+        self.assertEqual((output / "keep.bin").read_bytes(), b"another process")
+
+    def test_cleanup_failure_reports_original_error_and_remaining_path(self):
+        output = self.root / "package"
+        with mock.patch.object(Path, "write_text", side_effect=OSError("manifest disk full")), \
+                mock.patch("exoanchor_toolkit.firmware.shutil.rmtree", side_effect=PermissionError("cleanup denied")):
+            with self.assertRaises(ToolkitError) as raised:
+                create_firmware_package(self.build, output)
+        message = str(raised.exception)
+        self.assertIn("manifest disk full", message)
+        self.assertIn("cleanup denied", message)
+        self.assertIn(str(output.resolve()), message)
+        self.assertTrue(output.exists())
 
     def test_package_requires_third_party_notices(self):
         (self.build / THIRD_PARTY_NOTICES_NAME).unlink()

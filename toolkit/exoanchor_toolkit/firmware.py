@@ -353,48 +353,66 @@ def create_firmware_package(build_dir: str | Path, output_dir: str | Path) -> Pa
     if {address for address, _ in normalized} != REQUIRED_OFFSETS:
         raise ToolkitError("build does not contain the complete ExoAnchor flash layout")
 
-    output.mkdir(parents=True)
-    shutil.copyfile(notices_path, output / THIRD_PARTY_NOTICES_NAME)
-    image_dir = output / "images"
-    image_dir.mkdir()
-    segments = []
-    for address, source in sorted(normalized):
-        destination_name = f"{address:06x}-{source.name}"
-        destination = image_dir / destination_name
-        shutil.copyfile(source, destination)
-        segments.append(
-            {
-                "address": f"0x{address:x}",
-                "file": destination.relative_to(output).as_posix(),
-                "size": destination.stat().st_size,
-                "sha256": sha256_file(destination),
-            }
-        )
+    try:
+        output.mkdir(parents=True)
+    except OSError as exc:
+        raise ToolkitError(f"cannot create firmware package directory {output}: {exc}") from exc
 
-    manifest = {
-        "schema_version": SCHEMA_VERSION,
-        "product": PRODUCT_ID,
-        "firmware": {
-            "version": version,
-            "board": board,
-            "chip": chip,
-            "flash_size": flash_size,
-        },
-        "flash": {
-            "mode": str(settings.get("flash_mode", "")),
-            "frequency": str(settings.get("flash_freq", "")),
-            "before": str(extra.get("before", "default_reset")),
-            "after": str(extra.get("after", "hard_reset")),
-            "stub": use_stub,
-        },
-        "segments": segments,
-    }
-    manifest_path = output / MANIFEST_NAME
-    manifest_path.write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    load_firmware_package(manifest_path)
+    # Cleanup is limited to the directory this call successfully created.
+    # A failed copy or final validation must allow a corrected build to retry.
+    try:
+        shutil.copyfile(notices_path, output / THIRD_PARTY_NOTICES_NAME)
+        image_dir = output / "images"
+        image_dir.mkdir()
+        segments = []
+        for address, source in sorted(normalized):
+            destination_name = f"{address:06x}-{source.name}"
+            destination = image_dir / destination_name
+            shutil.copyfile(source, destination)
+            segments.append(
+                {
+                    "address": f"0x{address:x}",
+                    "file": destination.relative_to(output).as_posix(),
+                    "size": destination.stat().st_size,
+                    "sha256": sha256_file(destination),
+                }
+            )
+
+        manifest = {
+            "schema_version": SCHEMA_VERSION,
+            "product": PRODUCT_ID,
+            "firmware": {
+                "version": version,
+                "board": board,
+                "chip": chip,
+                "flash_size": flash_size,
+            },
+            "flash": {
+                "mode": str(settings.get("flash_mode", "")),
+                "frequency": str(settings.get("flash_freq", "")),
+                "before": str(extra.get("before", "default_reset")),
+                "after": str(extra.get("after", "hard_reset")),
+                "stub": use_stub,
+            },
+            "segments": segments,
+        }
+        manifest_path = output / MANIFEST_NAME
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        load_firmware_package(manifest_path)
+    except BaseException as exc:
+        try:
+            shutil.rmtree(output)
+        except OSError as cleanup_error:
+            raise ToolkitError(
+                f"firmware package creation failed: {exc}; "
+                f"cannot remove incomplete package {output}: {cleanup_error}"
+            ) from exc
+        if isinstance(exc, OSError):
+            raise ToolkitError(f"cannot create firmware package {output}: {exc}") from exc
+        raise
     return manifest_path
 
 
